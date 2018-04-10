@@ -1,3 +1,6 @@
+(*ocamlfind ocamlopt -o Ex -linkpkg \
+  -package angstrom,angstrom.unix \
+  example2.ml*)
 open Angstrom
 open Printf
 
