@@ -1,9 +1,11 @@
+(*---ocamlc -o HW22 opal.ml hw22_unify.mli hw22_unify.ml---*)
+
 open Opal
 open List
 
 type algebraic_term = Var of string | Fun of string * (algebraic_term list)
 
-(*---Parser Combinator---*)
+(*----PARSER COMBINATOR----*)
 
 let rec list_to_string x str = match x with
         |[]-> str
@@ -37,12 +39,27 @@ let rec concat_all_functions_names_in_list x = match x with
 let system_to_equation x = let func_concats = concat_all_functions_names_in_list x in		
 							(Fun (func_concats, List.map fst x), Fun (func_concats, List.map snd x));;
 						
+(*----APPLY SUBSTITUTION----*)
+
+let rec find_in_list f l = match l with
+	[] -> None
+	| h::t -> if f h then Some h else find_in_list f t
 
 let rec apply_substitution x y = match y with
-	Var v -> (try let (pf, ps) = List.find (fun (f, s) -> f = v) x in 
-				ps with _ -> Var v)
-	| Fun (f, data) -> Fun (f, (List.map (fun term -> apply_substitution x term) data));;
+	Var v -> (match (find_in_list (fun (f, s) -> f = v) x) with
+		(Some (var_name, term)) -> term
+		| None -> Var v
+		)			
+	| (Fun (f, data)) -> Fun (f, (List.map (apply_substitution x) data));;
 
+let apply_substitution_to_sol sub sol = 
+	List.map (fun(a, b) -> ((a, apply_substitution sub b))) sol;;
+						
+let rec closure ls sol = match ls with 
+	[] -> sol
+	| (var_name, term)::tail -> closure (apply_substitution_to_sol ((var_name, term)::sol) tail) ((var_name, term)::sol);;
+
+(*----CHECK SOLUTION----*)
 
 exception Key_not_found of string;;
 
@@ -55,82 +72,75 @@ let rec equals t1 t2 = match (t1, t2) with
 	| _ -> false;;
 
 		
-let rec check_equation_solution sol fs sn = match (fs, sn) with
-	(Fun (nl, lil), Fun(nr, lir)) -> nl = nr && check_to_lists (check_equation_solution sol) lil lir
-	| (a, b) -> equals (apply_substitution sol a) (apply_substitution sol b);;
-		
-let rec check_solution x y = match y with 
-	[] -> true 
-	| (fs, sn)::tl -> check_equation_solution x fs sn && check_solution x tl;;
-	
+let rec check_terms t1 t2 = match (t1, t2) with
+        (Var a, Var b) -> a = b
+        | (Fun(f, l1), Fun(g, l2)) -> f = g && check_lists l1 l2 
+        | _ -> false
 
-exception NoSolution;;
-	
+    and check_lists l1 l2 = match (l1, l2) with
+        ([], []) -> true
+        | (fst1::t1), (fst2::t2) -> (check_terms fst1 fst2) && (check_lists t1 t2) 
+        | _ -> false;;
 
-exception Error;;
+let view_with_subst x e = match e with
+    (left, right) -> check_terms (apply_substitution x left) (apply_substitution x right)
+
+let rec check_solution x sys = match sys with
+    [] -> true
+    | h::t -> (view_with_subst x h) && (check_solution x t);;
 		
 (* Checks if alg term contains var *)
 let rec contains_var var alg = match alg with
 	Var v -> var = v
 	| Fun (name, ls) -> List.exists (contains_var var) ls;;
 	
+let rec list_to_string x str = match x with
+        |[]-> str
+        |h::t -> type_to_string h (list_to_string t str)
 
-let rec term_to_string term = match term with 
-	Var a -> a
-	| Fun(name, ls) -> name ^ "(" ^ (data_to_string ls)^ ")"
-and data_to_string data = match data with
-	[] -> ""
-	| last::[] -> term_to_string last
-	| hd::tail -> (term_to_string hd) ^ "," ^ (data_to_string tail);;
-let print_term term = print_string (term_to_string term);;
-let print_term_e term = print_term term; print_newline();;
+and type_to_string x str = match x with 
+        |Var a -> a ^ str
+        |Fun(a, b) -> "(" ^ a ^ (list_to_string b str) ^ ")" ;;
 
-let apply_substitution_to_sol sub sol = 
-	List.map (fun(a, b) -> ((*print_string a;
-						print_string "\n";
-							print_term b;
-						print_string "\n";
-						print_term (apply_substitution sub b);
-						print_string "\n";
-						print_string "\n";*)
-	(a, apply_substitution sub b))) sol;;
-						
-let rec zamykanie ls sol = match ls with 
-	[] -> sol
-	| (var, d)::tail -> 
-(*		print_string ("var:"^var^"=");
-		print_term d;
-		print_string "\n";*)
-				
-	zamykanie (apply_substitution_to_sol ((var, d)::sol) tail)
-					((var, d)::sol);;
-							
+let solution_to_string sol = 
+		String.concat "\n" (List.map (fun (var_name, term) -> (var_name ^ "=" ^ (type_to_string term ""))) sol);;
+
+(*----SOLVE SYSTEM----*)
+
+exception EXC of string;;
 
 let rec solve ls prefix = match ls with
-	[] -> zamykanie (prefix) [] 
+	[] -> closure (prefix) [] 
 	| (Fun (ln, ll), Fun (rn, rl))::tail -> 
 		if ln = rn then 
 			solve (List.append (List.map2 (fun a b -> (a, b)) ll rl) tail) prefix
 		else (
 			print_endline ("got different fucntions "^ln^rn);
-			raise NoSolution
+			raise (EXC "")
 		)
 	| (Fun (n, l), Var v)::tail -> solve ((Var v, Fun (n, l))::tail) prefix 
 	| (Var var, r)::tail -> 
 		if equals (Var var) r then (
 			solve tail prefix 
 		) else if contains_var var r then (
-			print_endline ("got "^var^" in "^(term_to_string r));
-			raise NoSolution
+			print_endline ("got "^var^" in "^(type_to_string r ""));
+			raise (EXC "")
 		) else (
 			solve (List.map (fun(a, b) -> (apply_substitution [var, r] a,
 					apply_substitution [var, r] b)) tail)
 				((var, r)::prefix)
 		);;
 
-let solve_system equations = try Some (solve equations []) with _ -> None;;
+let solve_system sys = 
+	try 
+		let result = solve sys [] in
+			print_string (solution_to_string result);
+			(* List.iter (fun (name, term) -> print_string (name^"="); print_string (type_to_string term ""); print_string "\n") result; *)
+			(Some result)
+	with (EXC what) -> print_string (what ^ "\n");
+None;;
 
-let checker system = 
+(* let checker system = 
 	List.iter (fun (lhs, rhs) -> print_term(lhs); print_string ("="); print_term rhs; print_string "\n") system;
 	print_string "aaa\n";
 
@@ -143,12 +153,13 @@ let checker system =
 			print_endline "fail"
 		else 
 			print_endline "correct solution";
-	;;
+	;; *)
 
 let left = "f1(k,f2(l,f3(m,f4(n,f5(o)))))"
 let right = "f1(f2(f3(f4(f5(o),n),m),l),k)"
 let solution left right = match (parse termList left, parse termList right) with
-  | (Some lt, Some rt) -> checker (combine lt rt) 
+  | (Some lt, Some rt) -> 
+    solve_system (combine lt rt); ()
   | _ -> print_endline "ERROR!";; 
 
 let left2 = LazyStream.of_string left;;
