@@ -2,6 +2,7 @@
 
 open Opal
 open List
+open Printf
 
 type algebraic_term = Var of string | Fun of string * (algebraic_term list)
 
@@ -61,8 +62,6 @@ let rec closure ls sol = match ls with
 
 (*----CHECK SOLUTION----*)
 
-exception Key_not_found of string;;
-
 let rec check_to_lists predicate list1 list2 = (List.length list1) = List.length list2 
 		&& List.fold_left2 (fun pr b c -> pr && predicate b c) true list1 list2;;
 	
@@ -89,7 +88,6 @@ let rec check_solution x sys = match sys with
     [] -> true
     | h::t -> (view_with_subst x h) && (check_solution x t);;
 		
-(* Checks if alg term contains var *)
 let rec contains_var var alg = match alg with
 	Var v -> var = v
 	| Fun (name, ls) -> List.exists (contains_var var) ls;;
@@ -115,7 +113,6 @@ let rec solve ls prefix = match ls with
 		if ln = rn then 
 			solve (List.append (List.map2 (fun a b -> (a, b)) ll rl) tail) prefix
 		else (
-			print_endline ("got different fucntions "^ln^rn);
 			raise (EXC "")
 		)
 	| (Fun (n, l), Var v)::tail -> solve ((Var v, Fun (n, l))::tail) prefix 
@@ -123,7 +120,6 @@ let rec solve ls prefix = match ls with
 		if equals (Var var) r then (
 			solve tail prefix 
 		) else if contains_var var r then (
-			print_endline ("got "^var^" in "^(type_to_string r ""));
 			raise (EXC "")
 		) else (
 			solve (List.map (fun(a, b) -> (apply_substitution [var, r] a,
@@ -135,25 +131,9 @@ let solve_system sys =
 	try 
 		let result = solve sys [] in
 			print_string (solution_to_string result);
-			(* List.iter (fun (name, term) -> print_string (name^"="); print_string (type_to_string term ""); print_string "\n") result; *)
 			(Some result)
 	with (EXC what) -> print_string (what ^ "\n");
 None;;
-
-(* let checker system = 
-	List.iter (fun (lhs, rhs) -> print_term(lhs); print_string ("="); print_term rhs; print_string "\n") system;
-	print_string "aaa\n";
-
-	match solve_system system with 
-	None -> print_string "none\n";
-	| Some ls -> 
-		List.iter (fun (name, term) -> print_string (name^"="); print_term term; print_string "\n") ls;
-		print_string "----------\n";
-		if check_solution ls system = false then 
-			print_endline "fail"
-		else 
-			print_endline "correct solution";
-	;; *)
 
 let left = "f1(k,f2(l,f3(m,f4(n,f5(o)))))"
 let right = "f1(f2(f3(f4(f5(o),n),m),l),k)"
@@ -162,6 +142,16 @@ let solution left right = match (parse termList left, parse termList right) with
     solve_system (combine lt rt); ()
   | _ -> print_endline "ERROR!";; 
 
-let left2 = LazyStream.of_string left;;
-let right2 = LazyStream.of_string right;;
-solution left2 right2;;
+let file = "test.txt"
+let () =
+  let ic = open_in file in
+  try 
+		let left = LazyStream.of_string (input_line ic) in   
+		let right = LazyStream.of_string (input_line ic) in
+    solution left right;
+    close_in ic
+  
+  with e ->                   
+    close_in_noerr ic;
+    raise e
+                 
