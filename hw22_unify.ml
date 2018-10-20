@@ -130,7 +130,7 @@ let rec solve ls prefix = match ls with
 let solve_system sys = 
 	try 
 		let result = solve sys [] in
-			print_string (solution_to_string result);
+			print_string ((solution_to_string result) ^ "\n");
 			(Some result)
 	with (EXC what) -> print_string (what ^ "\n");
 None;;

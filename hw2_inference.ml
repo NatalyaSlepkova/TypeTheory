@@ -111,35 +111,34 @@ let rec free_types hm_type =
   | HM_Arrow (a, b) -> StringSet.union (free_types a) (free_types b)
   | HM_ForAll (a, b) -> StringSet.remove a (free_types b);;
 
-let algorithm_w hm_lambda = 
+
+let algorithm_w hm_lambda =
   let several_subst subst1 subst2 =
-  (let subst2 = StringMap.map (apply_type_subst subst1) subst2 in
+  let subst2 = StringMap.map (apply_type_subst subst1) subst2 in
   StringMap.merge (fun key v1 v2 ->
       match (v1, v2) with
       | (None, None) -> None
       | (Some v, None) -> Some v
       | (None, Some v) -> Some v
-      | (Some v1, Some v2) -> Some v2) subst1 subst2) in
-  let rec represent hm_type = (match hm_type with
+      | (Some v1, Some v2) -> Some v2) subst1 subst2 in
+  let rec represent hm_type =
+    match hm_type with
     | HM_ForAll (a, b) ->
       let subst = StringMap.singleton a (HM_Elem (Stream.next unique_var)) in
       apply_type_subst subst (represent b)
-    | hm_type -> hm_type) in
-  let new_type = HM_Elem (Stream.next unique_var) in
+    | _ -> hm_type in
   let rec algorithm_w_rec type_env hm_lambda =
     match hm_lambda with
-    | HM_Var a when StringMap.mem a type_env -> 
-      (StringMap.empty, match (StringMap.find a type_env) with
-        | HM_ForAll (a, b) ->
-          let subst = StringMap.singleton a (HM_Elem (Stream.next unique_var)) in
-          apply_type_subst subst (represent b)
-        | hm_type -> hm_type
-    )
+    | HM_Var a when StringMap.mem a type_env ->
+      (StringMap.empty, represent (StringMap.find a type_env))
     | HM_Var a -> raise (EXC "Free var!")
     | HM_App (a, b) ->
       (let (s1, t1) = algorithm_w_rec type_env a in
        let (s2, t2) = algorithm_w_rec (apply_subst_to_env s1 type_env) b in
-       let equation = (term_of_hm_type (apply_type_subst s2 t1), term_of_hm_type (HM_Arrow (t2, new_type))) in
+       let new_type = HM_Elem (Stream.next unique_var) in
+       let left = apply_type_subst s2 t1 in
+       let right = HM_Arrow (t2, new_type) in
+       let equation = (term_of_hm_type left, term_of_hm_type right) in
        match solve_system [equation] with
        | None -> raise (EXC "Couldn't solve")
        | Some answer ->
@@ -148,17 +147,18 @@ let algorithm_w hm_lambda =
          let unifier = several_subst v (several_subst s2 s1) in
          (unifier, apply_type_subst unifier new_type))
     | HM_Abs (a, b) ->
+      let new_type = HM_Elem (Stream.next unique_var) in
       let type_env = StringMap.add a new_type (StringMap.remove a type_env) in
       let (s1, t1) = algorithm_w_rec type_env b in
       (s1, HM_Arrow (apply_type_subst s1 new_type, t1))
     | HM_Let (a, b, c) ->
-      let gen type_env hm_type = (
+      let gen type_env hm_type =
       let add_free_types key value = StringSet.union (free_types value) in
       let free_env_types = StringMap.fold add_free_types type_env StringSet.empty in
       let free_hm_types = free_types hm_type in
       let new_forall_vars = StringSet.diff free_hm_types free_env_types in
       let add_quantifier var hm_type = HM_ForAll (var, hm_type) in
-      StringSet.fold add_quantifier new_forall_vars hm_type) in
+      StringSet.fold add_quantifier new_forall_vars hm_type in
       let (s1, t1) = algorithm_w_rec type_env b in
       let a_type = gen (apply_subst_to_env s1 type_env) t1 in
       let type_env = apply_subst_to_env s1 (StringMap.remove a type_env) in
@@ -172,6 +172,7 @@ let algorithm_w hm_lambda =
     let (unifier, hm_type) = algorithm_w_rec type_environment hm_lambda in
     Some (StringMap.bindings unifier, hm_type)
   with (EXC e) -> None;;
+
 
 let rec list_to_string x str = match x with
         |[]-> str
@@ -189,8 +190,7 @@ let test t =
 
 
 let simpleTest = HM_Abs("x", HM_Var("x"));;
-let secondTest = HM_Let("w", HM_Abs("f", HM_Abs("x", HM_App(HM_Var("f"), HM_App(HM_Var("f"), HM_Var("x"))))), HM_App(HM_Var("w"), HM_App(HM_Var("w"), HM_App(HM_Var("w"), HM_App(HM_Var("w"), HM_App(HM_Var("w"), HM_App(HM_Var("w"), HM_App(HM_Var("w"), HM_App(HM_Var("w"), HM_App(HM_Var("w"), HM_App(HM_Var("w"), HM_App(HM_Var("w"), HM_App(HM_Var("w"), HM_Var("w"))))))))))))));; 
+let secondTest = HM_Let("sq", HM_Abs("f", HM_Abs("x", HM_App(HM_Var("f"), HM_App(HM_Var("f"), HM_Var("x"))))), HM_App(HM_Var("sq"), HM_App(HM_Var("sq"), HM_App(HM_Var("sq"), HM_App(HM_Var("sq"), HM_App(HM_Var("sq"), HM_App(HM_Var("sq"), HM_App(HM_Var("sq"), HM_App(HM_Var("sq"), HM_App(HM_Var("sq"), HM_App(HM_Var("sq"), HM_App(HM_Var("sq"), HM_App(HM_Var("sq"), HM_Var("sq"))))))))))))));; 
 
-test simpleTest;;
-(* test secondTest;; *)
+test secondTest;;
 
