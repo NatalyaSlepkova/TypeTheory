@@ -142,7 +142,7 @@ let solution left right = match (parse termList left, parse termList right) with
     solve_system (combine lt rt); ()
   | _ -> print_endline "ERROR!";; 
 
-let file = "test.txt"
+(* let file = "test.txt"
 let () =
   let ic = open_in file in
   try 
@@ -153,5 +153,5 @@ let () =
   
   with e ->                   
     close_in_noerr ic;
-    raise e
+    raise e *)
                  

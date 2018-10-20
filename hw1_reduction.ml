@@ -132,9 +132,9 @@ let reduce_to_normal_form l =
 		while get_reduce_to_normal adv_l do () done;
 		come_down adv_l;; 
 
-let l3 = lambda_of_string "(\\x. (x x)) ((\\x. y) z)";;
+(* let l3 = lambda_of_string "(\\x. (x x)) ((\\x. y) z)";;
 print_endline("(\\x. (x x)) ((\\x. y) z)");;
 print_endline(string_of_lambda (reduce_to_normal_form l3));;
 let l4 = lambda_of_string "(\\x. x x x) (\\x. x)";;
 print_endline("(\\x. x x x) (\\x. x)");;
-print_endline(string_of_lambda (reduce_to_normal_form l4));;
+print_endline(string_of_lambda (reduce_to_normal_form l4));; *)
